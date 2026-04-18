@@ -66,7 +66,8 @@ jobs:
 
       - name: Install Asciidoctor PDF
         run: |
-          gem install asciidoctor-pdf
+          gem install --user-install asciidoctor-pdf
+          echo "$HOME/.local/share/gem/ruby/3.2.0/bin" >> $GITHUB_PATH
 
       - name: Generate PDF
         run: |
