@@ -1,0 +1,83 @@
+name: Build Timefold Docs PDF
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-pdf:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build merged AsciiDoc bundle
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          pages_dir = Path("docs/src/modules/ROOT/pages")
+          nav_file = Path("docs/src/modules/ROOT/nav.adoc")
+          out_file = Path("timefold-docs-all.adoc")
+
+          nav = nav_file.read_text(encoding="utf-8")
+
+          page_paths = re.findall(r'xref:([^\[]+)\[', nav)
+
+          seen = set()
+          ordered = []
+          for rel in page_paths:
+            rel = rel.split('#')[0]
+            p = pages_dir / rel
+            if p.suffix != ".adoc":
+              continue
+            if p.exists() and p not in seen:
+              seen.add(p)
+              ordered.append(p)
+
+          with out_file.open("w", encoding="utf-8") as out:
+            out.write("= Timefold Solver Documentation\n")
+            out.write(":toc:\n")
+            out.write(":toclevels: 4\n")
+            out.write(":sectnums:\n\n")
+
+            for p in ordered:
+              text = p.read_text(encoding="utf-8")
+
+              # Drop page attributes that can conflict when concatenated
+              cleaned = []
+              for line in text.splitlines():
+                if line.startswith(":") and ":" in line[1:]:
+                  continue
+                cleaned.append(line)
+              text = "\n".join(cleaned).strip()
+
+              out.write(f"\n\n// ===== FILE: {p.as_posix()} =====\n\n")
+              out.write(text)
+              out.write("\n")
+
+          print(f"Wrote {out_file} with {len(ordered)} pages")
+          PY
+
+      - name: Install Asciidoctor PDF
+        run: |
+          gem install asciidoctor-pdf
+
+      - name: Generate PDF
+        run: |
+          asciidoctor-pdf \
+            -a pdf-theme=default \
+            -a reproducible \
+            -o timefold-solver-docs.pdf \
+            timefold-docs-all.adoc
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: timefold-solver-docs-pdf
+          path: timefold-solver-docs.pdf
